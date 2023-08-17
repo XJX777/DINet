@@ -17,12 +17,18 @@ import torch.optim as optim
 import os
 import torch.nn.functional as F
 
+
+
+from torch.utils.tensorboard import SummaryWriter
+
 if __name__ == "__main__":
     '''
             clip training code of DINet
             in the resolution you want, using clip training code after frame training
             
         '''
+    writer = SummaryWriter('./logs')
+
     # load config
     opt = DINetTrainingOptions().parse_args()
     random.seed(opt.seed)
@@ -73,6 +79,7 @@ if __name__ == "__main__":
             reference_clip = torch.cat(torch.split(reference_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             deep_speech_clip = torch.cat(torch.split(deep_speech_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             deep_speech_full = deep_speech_full.float().cuda()
+            
             fake_out = net_g(source_clip_mask,reference_clip,deep_speech_clip)
             fake_out_half = F.avg_pool2d(fake_out, 3, 2, 1, count_include_pad=False)
             source_clip_half = F.interpolate(source_clip, scale_factor=0.5, mode='bilinear')
@@ -83,7 +90,7 @@ if __name__ == "__main__":
             _,pred_real_dI = net_dI(source_clip)
             loss_dI_real = criterionGAN(pred_real_dI, True)
             # Combined DI loss
-            loss_dI = (loss_dI_fake + loss_dI_real) * 0.5
+            loss_dI = (loss_dI_fake + loss_dI_real) * 0.5 * 1.5              # GAN Loss D(true + Fake)  using  Discriminator-image-model
             loss_dI.backward(retain_graph=True)
             optimizer_dI.step()
 
@@ -96,13 +103,11 @@ if __name__ == "__main__":
             _, pred_real_dV = net_dV(condition_real_dV)
             loss_dV_real = criterionGAN(pred_real_dV, True)
             # Combined DV loss
-            loss_dV = (loss_dV_fake + loss_dV_real) * 0.5
+            loss_dV = (loss_dV_fake + loss_dV_real) * 0.5 * 1.5              # GAN Loss D(true + Fake) using  Discriminator-video-model
             loss_dV.backward(retain_graph=True)
             optimizer_dV.step()
 
             # (2) Update DINet
-            _, pred_fake_dI = net_dI(fake_out)
-            _, pred_fake_dV = net_dV(condition_fake_dV)
             optimizer_g.zero_grad()
             # compute perception loss
             perception_real = net_vgg(source_clip)
@@ -113,30 +118,51 @@ if __name__ == "__main__":
             for i in range(len(perception_real)):
                 loss_g_perception += criterionL1(perception_fake[i], perception_real[i])
                 loss_g_perception += criterionL1(perception_fake_half[i], perception_real_half[i])
-            loss_g_perception = (loss_g_perception / (len(perception_real) * 2)) * opt.lamb_perception
+            loss_g_perception = (loss_g_perception / (len(perception_real) * 2)) * opt.lamb_perception        # perception-Loss  using  DINet(net_g)
+
+            _, pred_fake_dI = net_dI(fake_out)
+            _, pred_fake_dV = net_dV(condition_fake_dV)            
             # # gan dI loss
-            loss_g_dI = criterionGAN(pred_fake_dI, True)
+            loss_g_dI = criterionGAN(pred_fake_dI, True)                 # GAN Loss G  using Discriminator-image-model
             # # gan dV loss
-            loss_g_dV = criterionGAN(pred_fake_dV, True)
+            loss_g_dV = criterionGAN(pred_fake_dV, True)                 # GAN Loss G  using Discriminator-video-model
+            
             ## sync perception loss
             fake_out_clip = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
             fake_out_clip_mouth = fake_out_clip[:, :, train_data.radius:train_data.radius + train_data.mouth_region_size,
             train_data.radius_1_4:train_data.radius_1_4 + train_data.mouth_region_size]
             sync_score = net_lipsync(fake_out_clip_mouth, deep_speech_full)
-            loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception
+            loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception        # sync-Loss  using  syncnet(net_g res)
             # combine all losses
-            loss_g =   loss_g_perception + loss_g_dI +loss_g_dV + loss_sync
+            loss_g =   loss_g_perception +  1.5 * (loss_g_dI +loss_g_dV) + loss_sync
             loss_g.backward()
             optimizer_g.step()
 
             print(
-                "===> Epoch[{}]({}/{}):  Loss_DI: {:.4f} Loss_GI: {:.4f} Loss_DV: {:.4f} Loss_GV: {:.4f} Loss_perception: {:.4f} Loss_sync: {:.4f} lr_g = {:.7f} ".format(
+                "===> Epoch[{}]({}/{}):  Loss_Gan_D_image: {:.4f} Loss_Gan_G_image: {:.4f} Loss_Gan_D_video: {:.4f} Loss_Gan_G_video: {:.4f} Loss_perception: {:.4f} Loss_sync: {:.4f} lr_g = {:.7f} ".format(
                     epoch, iteration, len(training_data_loader), float(loss_dI), float(loss_g_dI),float(loss_dV), float(loss_g_dV), float(loss_g_perception),float(loss_sync),
                     optimizer_g.param_groups[0]['lr']))
+            
+            writer.add_scalar("Loss_Gan_D_image", float(loss_dI), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_Gan_G_image", float(loss_g_dI), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_Gan_D_video", float(loss_dV), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_Gan_G_video", float(loss_g_dV), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_perception", float(loss_g_perception), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_sync", float(loss_sync), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("lr_g", float(optimizer_g.param_groups[0]['lr']), epoch*len(training_data_loader)+iteration)
 
         update_learning_rate(net_g_scheduler, optimizer_g)
         update_learning_rate(net_dI_scheduler, optimizer_dI)
         update_learning_rate(net_dV_scheduler, optimizer_dV)
+        
+        writer.add_scalar("Loss_DI_epoch", float(loss_dI), epoch)
+        writer.add_scalar("Loss_GI_epoch", float(loss_g_dI), epoch)
+        writer.add_scalar("Loss_DV_epoch", float(loss_dV), epoch)
+        writer.add_scalar("Loss_Gan_G_video", float(loss_g_dV), epoch)
+        writer.add_scalar("Loss_perception_epoch", float(loss_g_perception), epoch)
+        writer.add_scalar("Loss_sync_epoch", float(loss_sync), epoch)
+        writer.add_scalar("lr_g_epoch", float(optimizer_g.param_groups[0]['lr']), epoch)
+        
         # checkpoint
         if epoch %  opt.checkpoint == 0:
             if not os.path.exists(opt.result_path):
