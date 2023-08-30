@@ -1,12 +1,13 @@
 from models.Discriminator import Discriminator
 from models.VGG19 import Vgg19
 from models.DINet import DINet
-from models.Syncnet import SyncNetPerception
+from models.Syncnet import SyncNetPerception 
+from models.color_syncnet import SyncNet_color  as SyncNet
 from utils.training_utils import get_scheduler, update_learning_rate,GANLoss
 from config.config import DINetTrainingOptions
 from sync_batchnorm import convert_model
 from torch.utils.data import DataLoader
-from dataset.dataset_DINet_clip import DINetDataset
+from dataset.dataset_DINet_clip_colorsync import DINetDataset
 
 
 import random
@@ -21,6 +22,33 @@ import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 import cv2
+
+
+
+def _load(checkpoint_path):
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        checkpoint = torch.load(checkpoint_path)
+    else:
+        checkpoint = torch.load(checkpoint_path,
+                                map_location=lambda storage, loc: storage)
+    return checkpoint
+
+def load_checkpoint(path, model):
+    print("Load checkpoint from: {}".format(path))
+    checkpoint = _load(path)
+    s = checkpoint["state_dict"]
+    new_s = {}
+    for k, v in s.items():
+        new_s[k.replace('module.', '')] = v
+    model.load_state_dict(new_s)
+    return model
+
+logloss = nn.BCELoss()
+def cosine_loss(a, v, y):
+    d = nn.functional.cosine_similarity(a, v)
+    loss = logloss(d.unsqueeze(1), y)
+    return loss
 
 if __name__ == "__main__":
     '''
@@ -46,7 +74,18 @@ if __name__ == "__main__":
     net_dI = Discriminator(opt.source_channel ,opt.D_block_expansion, opt.D_num_blocks, opt.D_max_features).cuda()
     net_dV = Discriminator(opt.source_channel * 5, opt.D_block_expansion, opt.D_num_blocks, opt.D_max_features).cuda()
     net_vgg = Vgg19().cuda()
-    net_lipsync = SyncNetPerception(opt.pretrained_syncnet_path).cuda()
+    
+    # import pdb
+    # pdb.set_trace()
+    # for sync net
+    # net_lipsync = SyncNetPerception(opt.pretrained_syncnet_path).cuda()
+    net_lipsync = SyncNet().cuda()
+    for p in net_lipsync.parameters():
+        p.requires_grad = False
+    # pdb.set_trace()
+    net_lipsync = load_checkpoint(opt.pretrained_syncnet_path, net_lipsync)
+    net_lipsync = net_lipsync.cuda()
+    
     # parallel
     net_g = nn.DataParallel(net_g)
     net_g = convert_model(net_g)
@@ -76,16 +115,18 @@ if __name__ == "__main__":
         net_g.train()
         for iteration, data in enumerate(training_data_loader):
             # forward
-            source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full = data
-            
-            import pdb
-            pdb.set_trace()
+            source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, sync_mel, sync_img_data, sync_y = data
             
             source_clip = torch.cat(torch.split(source_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             source_clip_mask = torch.cat(torch.split(source_clip_mask, 1, dim=1), 0).squeeze(1).float().cuda()
             reference_clip = torch.cat(torch.split(reference_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             deep_speech_clip = torch.cat(torch.split(deep_speech_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             deep_speech_full = deep_speech_full.float().cuda()
+            
+            # sync net input data
+            sync_mel = sync_mel.cuda()
+            sync_img_data = sync_img_data.cuda()
+            sync_y = sync_y.cuda()
             
             fake_out = net_g(source_clip_mask,reference_clip,deep_speech_clip)
             fake_out_half = F.avg_pool2d(fake_out, 3, 2, 1, count_include_pad=False)
@@ -147,14 +188,20 @@ if __name__ == "__main__":
             # # gan dV loss
             loss_g_dV = criterionGAN(pred_fake_dV, True)                 # GAN Loss G  using Discriminator-video-model
             
-            ## sync perception loss
-            fake_out_clip = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
-            fake_out_clip_mouth = fake_out_clip[:, :, train_data.radius:train_data.radius + train_data.mouth_region_size,
-            train_data.radius_1_4:train_data.radius_1_4 + train_data.mouth_region_size]
-            sync_score = net_lipsync(fake_out_clip_mouth, deep_speech_full)
-            loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception        # sync-Loss  using  syncnet(net_g res)
+            # ## sync perception loss
+            # fake_out_clip = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
+            # fake_out_clip_mouth = fake_out_clip[:, :, train_data.radius:train_data.radius + train_data.mouth_region_size,
+            # train_data.radius_1_4:train_data.radius_1_4 + train_data.mouth_region_size]
+            # sync_score = net_lipsync(fake_out_clip_mouth, deep_speech_full)
+            # loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception        # sync-Loss  using  syncnet(net_g res)
+            
+            # ## color sync loss
+            # pdb.set_trace()
+            sync_a, sync_v = net_lipsync(sync_mel, sync_img_data)
+            loss_sync = cosine_loss(sync_a, sync_v, sync_y)
+            
             # combine all losses
-            loss_g =   loss_g_perception +  1.5 * (loss_g_dI +loss_g_dV) + loss_sync
+            loss_g =   loss_g_perception +  1.5 * (loss_g_dI +loss_g_dV) + loss_sync * 0.5
             # loss_g =   loss_g_perception +  loss_g_dI +loss_g_dV + loss_sync
             loss_g.backward()
             optimizer_g.step()

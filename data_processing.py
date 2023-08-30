@@ -36,7 +36,9 @@ def extract_deep_speech(audio_dir,res_deep_speech_dir,deep_speech_model_path):
         video_name = os.path.basename(wav_path).replace('.wav', '')
         res_dp_path = os.path.join(res_deep_speech_dir, video_name + '_deepspeech.txt')
         if os.path.exists(res_dp_path):
-            os.remove(res_dp_path)
+            print("already exists")
+            continue
+            # os.remove(res_dp_path)
         print('extract deep speech feature from audio:{}'.format(video_name))
         ds_feature = DSModel.compute_audio_feature(wav_path)
         np.savetxt(res_dp_path, ds_feature)
@@ -45,6 +47,7 @@ def extract_video_frame(source_video_dir,res_video_frame_dir):
     '''
         extract video frames from videos
     '''
+    print(source_video_dir)
     if not os.path.exists(source_video_dir):
         raise ('wrong path of video dir')
     if not os.path.exists(res_video_frame_dir):
@@ -55,9 +58,12 @@ def extract_video_frame(source_video_dir,res_video_frame_dir):
         frame_dir = os.path.join(res_video_frame_dir, video_name.replace('.mp4', ''))
         if not os.path.exists(frame_dir):
             os.makedirs(frame_dir)
+        else:
+            continue
         print('extracting frames from {} ...'.format(video_name))
         videoCapture = cv2.VideoCapture(video_path)
         fps = videoCapture.get(cv2.CAP_PROP_FPS)
+        print(video_path, fps)
         if int(fps) != 25:
             raise ('{} video is not in 25 fps'.format(video_path))
         frames = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
@@ -83,6 +89,10 @@ def crop_face_according_openfaceLM(openface_landmark_dir,video_frame_dir,res_cro
         crop_face_video_dir = os.path.join(res_crop_face_dir, video_name)
         if not os.path.exists(crop_face_video_dir):
             os.makedirs(crop_face_video_dir)
+        else:
+            print("already exits")
+            continue
+            
         print('cropping face from video: {} ...'.format(video_name))
         landmark_openface_data = load_landmark_openface(landmark_openface_path).astype(np.int)
         frame_dir = os.path.join(video_frame_dir, video_name)

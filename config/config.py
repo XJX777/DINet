@@ -40,18 +40,22 @@ class DINetTrainingOptions():
         self.parser.add_argument('--ref_channel', type=int, default=15, help='input reference image channels')
         self.parser.add_argument('--audio_channel', type=int, default=29, help='input audio channels')
         self.parser.add_argument('--augment_num', type=int, default=32, help='augment training data')
+        # self.parser.add_argument('--augment_num', type=int, default=32, help='augment training data') # aug_num 32 to 1
         self.parser.add_argument('--mouth_region_size', type=int, default=64, help='augment training data')
         self.parser.add_argument('--train_data', type=str, default=r"./asserts/training_data/training_json.json",
                             help='path of training json')
         self.parser.add_argument('--batch_size', type=int, default=24, help='training batch size')
+        # self.parser.add_argument('--batch_size', type=int, default=160, help='training batch size') # bs from 24 to 160
         self.parser.add_argument('--lamb_perception', type=int, default=10, help='weight of perception loss')
         self.parser.add_argument('--lamb_syncnet_perception', type=int, default=0.1, help='weight of perception loss')
         self.parser.add_argument('--lr_g', type=float, default=0.0001, help='initial learning rate for adam')
         self.parser.add_argument('--lr_dI', type=float, default=0.0001, help='initial learning rate for adam')
+        # self.parser.add_argument('--lr_g', type=float, default=0.0005, help='initial learning rate for adam') # org_lr *10
+        # self.parser.add_argument('--lr_dI', type=float, default=0.0005, help='initial learning rate for adam') # org_lr *10
         self.parser.add_argument('--start_epoch', default=1, type=int, help='start epoch in training stage')
         self.parser.add_argument('--non_decay', default=200, type=int, help='num of epoches with fixed learning rate')
         self.parser.add_argument('--decay', default=200, type=int, help='num of linearly decay epochs')
-        self.parser.add_argument('--checkpoint', type=int, default=2, help='num of checkpoints in training stage')
+        self.parser.add_argument('--checkpoint', type=int, default=5, help='num of checkpoints in training stage')
         self.parser.add_argument('--result_path', type=str, default=r"./asserts/training_model_weight/frame_training_64",
                                  help='result path to save model')
         self.parser.add_argument('--coarse2fine', action='store_true', help='If true, load pretrained model path.')

@@ -169,6 +169,8 @@ class AudioEncoder(nn.Module):
         )
         self.global_avg = nn.AdaptiveAvgPool1d(1)
     def forward(self, x):
+        import pdb
+        pdb.set_trace()
         ## b x c x t
         out = self.audio_conv(x)
         return self.global_avg(out).squeeze(2)

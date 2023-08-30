@@ -15,6 +15,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.utils.tensorboard import SummaryWriter
+import cv2
+
 if __name__ == "__main__":
     '''
         frame training code of DINet
@@ -23,6 +26,9 @@ if __name__ == "__main__":
     '''
     # load config
     opt = DINetTrainingOptions().parse_args()
+    
+    writer = SummaryWriter('./logs/' + opt.result_path.split('/')[-1])
+    
     # set seed
     random.seed(opt.seed)
     np.random.seed(opt.seed)
@@ -32,6 +38,7 @@ if __name__ == "__main__":
     training_data_loader = DataLoader(dataset=train_data,  batch_size=opt.batch_size, shuffle=True,drop_last=True)
     train_data_length = len(training_data_loader)
     # init network
+    opt.audio_channel = 256
     net_g = DINet(opt.source_channel,opt.ref_channel,opt.audio_channel).cuda()
     net_dI = Discriminator(opt.source_channel ,opt.D_block_expansion, opt.D_num_blocks, opt.D_max_features).cuda()
     net_vgg = Vgg19().cuda()
@@ -66,6 +73,18 @@ if __name__ == "__main__":
             deepspeech_feature = deepspeech_feature.float().cuda()
             # network forward
             fake_out = net_g(source_image_mask,reference_clip_data,deepspeech_feature)
+            # print("source_image_data.shape: ", source_image_data.shape) #[24, 3, 104, 80]
+            # print("fake_out.shape: ", fake_out.shape) # [24, 3, 104, 80]
+            
+            # vis network output img
+            if iteration % 100 == 0:
+                fake_frame = fake_out[0, :, :, :].squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255
+                real_frame = source_image_data[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy() * 255
+                fake_img_name = "./vis_img/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake.jpg'
+                real_img_name = "./vis_img/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_real.jpg'
+                cv2.imwrite(fake_img_name, fake_frame[:, :, ::-1])
+                cv2.imwrite(real_img_name, real_frame[:, :, ::-1])
+            
             # down sample output image and real image
             fake_out_half = F.avg_pool2d(fake_out, 3, 2, 1, count_include_pad=False)
             target_tensor_half = F.interpolate(source_image_data, scale_factor=0.5, mode='bilinear')
@@ -105,8 +124,21 @@ if __name__ == "__main__":
                 "===> Epoch[{}]({}/{}):  Loss_DI: {:.4f} Loss_GI: {:.4f} Loss_perception: {:.4f} lr_g = {:.7f} ".format(
                     epoch, iteration, len(training_data_loader), float(loss_dI), float(loss_g_dI),  float(loss_g_perception),optimizer_g.param_groups[0]['lr']))
 
+            writer.add_scalar("Loss_DI", float(loss_dI), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_GI", float(loss_g_dI), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("Loss_perception", float(loss_g_perception), epoch*len(training_data_loader)+iteration)
+            writer.add_scalar("lr_g", float(optimizer_g.param_groups[0]['lr']), epoch*len(training_data_loader)+iteration)
+
+            
         update_learning_rate(net_g_scheduler, optimizer_g)
         update_learning_rate(net_dI_scheduler, optimizer_dI)
+
+        writer.add_scalar("Loss_DI_epoch", float(loss_dI), epoch)
+        writer.add_scalar("Loss_GI_epoch", float(loss_g_dI), epoch)
+        writer.add_scalar("Loss_perception_epoch", float(loss_g_perception), epoch)
+        writer.add_scalar("lr_g_epoch", float(optimizer_g.param_groups[0]['lr']), epoch)
+        
+        
         #checkpoint
         if epoch %  opt.checkpoint == 0:
             if not os.path.exists(opt.result_path):

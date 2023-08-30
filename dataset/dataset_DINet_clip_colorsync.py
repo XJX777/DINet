@@ -6,6 +6,9 @@ import cv2
 
 from torch.utils.data import Dataset
 
+from os.path import dirname, join, basename, isfile
+import audio
+
 
 def get_data(json_name,augment_num):
     print('start loading data')
@@ -31,12 +34,39 @@ class DINetDataset(Dataset):
         self.img_h = self.radius * 3 + self.radius_1_4
         self.img_w = self.radius * 2 + self.radius_1_4 * 2
         self.length = len(self.data_dic_name_list)
+        self.syncnet_mel_step_size = 16
 
     def __getitem__(self, index):
         video_name = self.data_dic_name_list[index]
         video_clip_num = len(self.data_dic[video_name]['clip_data_list'])
         source_anchor = random.sample(range(video_clip_num), 1)[0]
         source_image_path_list = self.data_dic[video_name]['clip_data_list'][source_anchor]['frame_path_list']
+        
+        # load sync audio data
+        frame_image_name = source_image_path_list[2].split('/')[-1]
+        frame_id = int(basename(frame_image_name).split('.')[0])
+        audio_path = join("./asserts/training_data/split_video_25fps_audio/", video_name + ".wav")
+        wav = audio.load_wav(audio_path, 16000)
+        orig_mel = audio.melspectrogram(wav).T
+        start_idx = int(80. * (frame_id / float(25)))
+        end_idx = start_idx + self.syncnet_mel_step_size
+        mel = orig_mel[start_idx : end_idx, :]
+        mel = torch.FloatTensor(mel.T).unsqueeze(0)
+        
+        # load sync img
+        sync_img_list = []
+        for source_frame_index in range(2, 2 + 5):
+            sync_img_data = cv2.imread(source_image_path_list[source_frame_index])
+            sync_img_data = cv2.resize(sync_img_data, (96, 96))
+            sync_img_list.append(sync_img_data)
+        # H x W x 3 * T
+        sync_img_data = np.concatenate(sync_img_list, axis=2) / 255.
+        sync_img_data = sync_img_data.transpose(2, 0, 1) # 3*T x H x W
+        sync_img_data = sync_img_data[:, sync_img_data.shape[1]//2:]
+        sync_img_data = torch.FloatTensor(sync_img_data)
+        
+        sync_y = torch.ones(1).float()
+            
         source_clip_list = []
         source_clip_mask_list = []
         deep_speech_list = []
@@ -111,12 +141,13 @@ class DINetDataset(Dataset):
         reference_clip = torch.from_numpy(reference_clip).float().permute(0, 3, 1, 2)
         deep_speech_clip = torch.from_numpy(deep_speech_clip).float().permute(0, 2, 1)
         deep_speech_full = torch.from_numpy(deep_speech_full).permute(1, 0)
-        print("source_clip.shape: ", source_clip.shape)
-        print("source_clip_mask.shape: ", source_clip_mask.shape)
-        print("reference_clip.shape: ", reference_clip.shape)
-        print("deep_speech_clip.shape: ", deep_speech_clip.shape)
-        print("deep_speech_full.shape: ", deep_speech_full.shape)
-        return source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full
+        # print("source_clip.shape: ", source_clip.shape)
+        # print("source_clip_mask.shape: ", source_clip_mask.shape)
+        # print("reference_clip.shape: ", reference_clip.shape)
+        # print("deep_speech_clip.shape: ", deep_speech_clip.shape)
+        # print("deep_speech_full.shape: ", deep_speech_full.shape)
+        # print("mel.shape: ", mel.shape)
+        return source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, mel, sync_img_data, sync_y
 
     def __len__(self):
         return self.length
