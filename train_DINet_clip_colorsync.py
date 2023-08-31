@@ -173,9 +173,6 @@ if __name__ == "__main__":
             optimizer_dI.step()
 
             # (2) Update DV network
-            
-            pdb.set_trace()
-            
             optimizer_dV.zero_grad()
             condition_fake_dV = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
             _, pred_fake_dV = net_dV(condition_fake_dV)
