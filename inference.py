@@ -39,14 +39,20 @@ if __name__ == '__main__':
     video_size = extract_frames_from_video(opt.source_video_path,video_frame_dir)
     ############################################## extract deep speech feature ##############################################
     print('extracting deepspeech feature from : {}'.format(opt.driving_audio_path))
-    if not os.path.exists(opt.deepspeech_model_path):
-        raise ('pls download pretrained model of deepspeech')
-    DSModel = DeepSpeech(opt.deepspeech_model_path)
-    if not os.path.exists(opt.driving_audio_path):
-        raise ('wrong audio path :{}'.format(opt.driving_audio_path))
-    ds_feature = DSModel.compute_audio_feature(opt.driving_audio_path)
+    # if not os.path.exists(opt.deepspeech_model_path):
+    #     raise ('pls download pretrained model of deepspeech')
+    # DSModel = DeepSpeech(opt.deepspeech_model_path)
+    # if not os.path.exists(opt.driving_audio_path):
+    #     raise ('wrong audio path :{}'.format(opt.driving_audio_path))
+    # ds_feature = DSModel.compute_audio_feature(opt.driving_audio_path) # (529, 29)
+    # res_frame_length = ds_feature.shape[0]
+    # ds_feature_padding = np.pad(ds_feature, ((2, 2), (0, 0)), mode='edge')
+    ds_feature = deep_speech_feature = np.loadtxt("./asserts/examples/chinese_test_audio1.txt")
     res_frame_length = ds_feature.shape[0]
     ds_feature_padding = np.pad(ds_feature, ((2, 2), (0, 0)), mode='edge')
+    
+    
+    
     ############################################## load facial landmark ##############################################
     print('loading facial landmarks from : {}'.format(opt.source_openface_landmark_path))
     if not os.path.exists(opt.source_openface_landmark_path):
@@ -101,6 +107,7 @@ if __name__ == '__main__':
 
     ############################################## load pretrained model weight ##############################################
     print('loading pretrained model from: {}'.format(opt.pretrained_clip_DINet_path))
+    opt.audio_channel = 256
     model = DINet(opt.source_channel, opt.ref_channel, opt.audio_channel).cuda()
     if not os.path.exists(opt.pretrained_clip_DINet_path):
         raise ('wrong path of pretrained model weight: {}'.format(opt.pretrained_clip_DINet_path))

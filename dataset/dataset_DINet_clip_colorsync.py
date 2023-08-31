@@ -52,19 +52,7 @@ class DINetDataset(Dataset):
         end_idx = start_idx + self.syncnet_mel_step_size
         mel = orig_mel[start_idx : end_idx, :]
         mel = torch.FloatTensor(mel.T).unsqueeze(0)
-        
-        # load sync img
-        sync_img_list = []
-        for source_frame_index in range(2, 2 + 5):
-            sync_img_data = cv2.imread(source_image_path_list[source_frame_index])
-            sync_img_data = cv2.resize(sync_img_data, (96, 96))
-            sync_img_list.append(sync_img_data)
-        # H x W x 3 * T
-        sync_img_data = np.concatenate(sync_img_list, axis=2) / 255.
-        sync_img_data = sync_img_data.transpose(2, 0, 1) # 3*T x H x W
-        sync_img_data = sync_img_data[:, sync_img_data.shape[1]//2:]
-        sync_img_data = torch.FloatTensor(sync_img_data)
-        
+        # load sync gt flag
         sync_y = torch.ones(1).float()
             
         source_clip_list = []
@@ -141,13 +129,7 @@ class DINetDataset(Dataset):
         reference_clip = torch.from_numpy(reference_clip).float().permute(0, 3, 1, 2)
         deep_speech_clip = torch.from_numpy(deep_speech_clip).float().permute(0, 2, 1)
         deep_speech_full = torch.from_numpy(deep_speech_full).permute(1, 0)
-        # print("source_clip.shape: ", source_clip.shape)
-        # print("source_clip_mask.shape: ", source_clip_mask.shape)
-        # print("reference_clip.shape: ", reference_clip.shape)
-        # print("deep_speech_clip.shape: ", deep_speech_clip.shape)
-        # print("deep_speech_full.shape: ", deep_speech_full.shape)
-        # print("mel.shape: ", mel.shape)
-        return source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, mel, sync_img_data, sync_y
+        return source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, mel, sync_y
 
     def __len__(self):
         return self.length

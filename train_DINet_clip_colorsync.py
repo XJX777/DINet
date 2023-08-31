@@ -115,7 +115,7 @@ if __name__ == "__main__":
         net_g.train()
         for iteration, data in enumerate(training_data_loader):
             # forward
-            source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, sync_mel, sync_img_data, sync_y = data
+            source_clip,source_clip_mask, reference_clip,deep_speech_clip,deep_speech_full, sync_mel, sync_y = data
             
             source_clip = torch.cat(torch.split(source_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             source_clip_mask = torch.cat(torch.split(source_clip_mask, 1, dim=1), 0).squeeze(1).float().cuda()
@@ -123,15 +123,33 @@ if __name__ == "__main__":
             deep_speech_clip = torch.cat(torch.split(deep_speech_clip, 1, dim=1), 0).squeeze(1).float().cuda()
             deep_speech_full = deep_speech_full.float().cuda()
             
-            # sync net input data
-            sync_mel = sync_mel.cuda()
-            sync_img_data = sync_img_data.cuda()
-            sync_y = sync_y.cuda()
-            
             fake_out = net_g(source_clip_mask,reference_clip,deep_speech_clip)
             fake_out_half = F.avg_pool2d(fake_out, 3, 2, 1, count_include_pad=False)
             source_clip_half = F.interpolate(source_clip, scale_factor=0.5, mode='bilinear')
             
+            # crop sync input fake data
+            fake_out_tmp = fake_out.clone()
+            _, _, h_fake, w_fake = fake_out_tmp.shape
+            fake_out_tmp = fake_out_tmp[:, :, int(h_fake * 0.380) : int(h_fake * 0.818), :]
+            fake_out_tmp = torch.split(fake_out_tmp, opt.batch_size, dim=0)
+            sync_fake_input = [[] for i in range(opt.batch_size)]
+            for ref_id in range(5):
+                for batch_id in range(opt.batch_size):
+                    tmp_img = fake_out_tmp[ref_id][batch_id, :, :, :].permute(1, 2, 0).detach().cpu().numpy()[:, :, ::-1]
+                    tmp_img = cv2.resize(tmp_img, (96, 48))
+                    sync_fake_input[batch_id].append(tmp_img)
+            batch_all_person_data = []
+            for batch_single_person_data in sync_fake_input:
+                batch_single_person_array = np.array(batch_single_person_data)
+                batch_single_person_array = np.concatenate(batch_single_person_array, axis=2)
+                batch_single_person_array = batch_single_person_array.transpose(2, 0, 1)
+                batch_all_person_data.append(batch_single_person_array)
+            sync_fake_img_tensor = torch.FloatTensor(batch_all_person_data)
+            
+            # prepare syncnet input data
+            sync_mel = sync_mel.cuda()
+            sync_fake_img_tensor = sync_fake_img_tensor.cuda()
+            sync_y = sync_y.cuda()
             
             # vis network output img
             if iteration % 100 == 0:
@@ -155,6 +173,9 @@ if __name__ == "__main__":
             optimizer_dI.step()
 
             # (2) Update DV network
+            
+            pdb.set_trace()
+            
             optimizer_dV.zero_grad()
             condition_fake_dV = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
             _, pred_fake_dV = net_dV(condition_fake_dV)
@@ -188,20 +209,12 @@ if __name__ == "__main__":
             # # gan dV loss
             loss_g_dV = criterionGAN(pred_fake_dV, True)                 # GAN Loss G  using Discriminator-video-model
             
-            # ## sync perception loss
-            # fake_out_clip = torch.cat(torch.split(fake_out, opt.batch_size, dim=0), 1)
-            # fake_out_clip_mouth = fake_out_clip[:, :, train_data.radius:train_data.radius + train_data.mouth_region_size,
-            # train_data.radius_1_4:train_data.radius_1_4 + train_data.mouth_region_size]
-            # sync_score = net_lipsync(fake_out_clip_mouth, deep_speech_full)
-            # loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception        # sync-Loss  using  syncnet(net_g res)
-            
             # ## color sync loss
-            # pdb.set_trace()
-            sync_a, sync_v = net_lipsync(sync_mel, sync_img_data)
+            sync_a, sync_v = net_lipsync(sync_mel, sync_fake_img_tensor)
             loss_sync = cosine_loss(sync_a, sync_v, sync_y)
             
             # combine all losses
-            loss_g =   loss_g_perception +  1.5 * (loss_g_dI +loss_g_dV) + loss_sync * 0.5
+            loss_g =   loss_g_perception +  1.5 * (loss_g_dI +loss_g_dV) + loss_sync * 1.0
             # loss_g =   loss_g_perception +  loss_g_dI +loss_g_dV + loss_sync
             loss_g.backward()
             optimizer_g.step()
