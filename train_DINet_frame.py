@@ -38,7 +38,7 @@ if __name__ == "__main__":
     training_data_loader = DataLoader(dataset=train_data,  batch_size=opt.batch_size, shuffle=True,drop_last=True)
     train_data_length = len(training_data_loader)
     # init network
-    opt.audio_channel = 256
+    # opt.audio_channel = 256
     net_g = DINet(opt.source_channel,opt.ref_channel,opt.audio_channel).cuda()
     net_dI = Discriminator(opt.source_channel ,opt.D_block_expansion, opt.D_num_blocks, opt.D_max_features).cuda()
     net_vgg = Vgg19().cuda()
@@ -80,8 +80,8 @@ if __name__ == "__main__":
             if iteration % 100 == 0:
                 fake_frame = fake_out[0, :, :, :].squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255
                 real_frame = source_image_data[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy() * 255
-                fake_img_name = "./vis_img/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake.jpg'
-                real_img_name = "./vis_img/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_real.jpg'
+                fake_img_name = "./vis_frame_64/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake.jpg'
+                real_img_name = "./vis_frame_64/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_real.jpg'
                 cv2.imwrite(fake_img_name, fake_frame[:, :, ::-1])
                 cv2.imwrite(real_img_name, real_frame[:, :, ::-1])
             

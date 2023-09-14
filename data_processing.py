@@ -19,6 +19,10 @@ def extract_audio(source_video_dir,res_audio_dir):
         os.mkdir(res_audio_dir)
     video_path_list = glob.glob(os.path.join(source_video_dir, '*.mp4'))
     for video_path in video_path_list:
+        csv_name  = video_path.replace('.mp4', '.csv').replace('split_video_25fps', 'split_video_25fps_landmark_openface')
+        if not os.path.exists(csv_name):
+            continue        
+
         print('extract audio from video: {}'.format(os.path.basename(video_path)))
         audio_path = os.path.join(res_audio_dir, os.path.basename(video_path).replace('.mp4', '.wav'))
         cmd = 'ffmpeg -i {} -f wav -ar 16000 {}'.format(video_path, audio_path)
@@ -56,6 +60,10 @@ def extract_video_frame(source_video_dir,res_video_frame_dir):
     for video_path in video_path_list:
         video_name = os.path.basename(video_path)
         frame_dir = os.path.join(res_video_frame_dir, video_name.replace('.mp4', ''))
+        csv_name  = video_path.replace('.mp4', '.csv').replace('split_video_25fps', 'split_video_25fps_landmark_openface')
+        if not os.path.exists(csv_name):
+            continue
+            
         if not os.path.exists(frame_dir):
             os.makedirs(frame_dir)
         else:
@@ -97,7 +105,9 @@ def crop_face_according_openfaceLM(openface_landmark_dir,video_frame_dir,res_cro
         landmark_openface_data = load_landmark_openface(landmark_openface_path).astype(np.int)
         frame_dir = os.path.join(video_frame_dir, video_name)
         if not os.path.exists(frame_dir):
-            raise ('run last step to extract video frame')
+            print("this frame dont exists")
+            continue
+            # raise ('run last step to extract video frame')
         if len(glob.glob(os.path.join(frame_dir, '*.jpg'))) != landmark_openface_data.shape[0]:
             raise ('landmark length is different from frame length')
         frame_length = min(len(glob.glob(os.path.join(frame_dir, '*.jpg'))), landmark_openface_data.shape[0])
@@ -136,11 +146,14 @@ def generate_training_json(crop_face_dir,deep_speech_dir,clip_length,res_json_pa
     video_name_list.sort()
     res_data_dic = {}
     for video_index, video_name in enumerate(video_name_list):
+        # if video_index >= 1:
+        #     break
         print('generate training json file :{} {}/{}'.format(video_name,video_index,len(video_name_list)))
         tem_dic = {}
         deep_speech_feature_path = os.path.join(deep_speech_dir, video_name + '_deepspeech.txt')
         if not os.path.exists(deep_speech_feature_path):
-            raise ('wrong path of deep speech')
+            continue
+            # raise ('wrong path of deep speech')
         deep_speech_feature = np.loadtxt(deep_speech_feature_path)
         video_clip_dir = os.path.join(crop_face_dir, video_name)
         clip_name_list = os.listdir(video_clip_dir)
@@ -161,6 +174,7 @@ def generate_training_json(crop_face_dir,deep_speech_dir,clip_length,res_json_pa
                 print(' skip video: {}:{}/{}  clip:{}:{}/{} because of different length: {} {}'.format(
                     video_name,video_index,len(video_name_list),clip_name,clip_index,len(clip_name_list),
                      len(frame_name_list),len(deep_speech_list)))
+                continue
             tem_tem_dic['frame_name_list'] = frame_name_list
             tem_tem_dic['frame_path_list'] = frame_path_list
             tem_tem_dic['deep_speech_list'] = deep_speech_list

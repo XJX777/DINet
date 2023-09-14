@@ -5,6 +5,7 @@ import random
 import cv2
 
 from torch.utils.data import Dataset
+import pdb
 
 
 def get_data(json_name,augment_num):
@@ -16,8 +17,10 @@ def get_data(json_name,augment_num):
         for video_name in data_dic.keys():
             data_dic_name_list.append(video_name)
     print("len(data_dic_name_list): ", len(data_dic_name_list))
+    # pdb.set_trace()
     random.shuffle(data_dic_name_list)
-    data_dic_name_list = data_dic_name_list[:4000]
+    
+    # data_dic_name_list = data_dic_name_list[:4000]
     print('finish loading')
     return data_dic_name_list,data_dic
 
@@ -37,10 +40,11 @@ class DINetDataset(Dataset):
         video_name = self.data_dic_name_list[index]
         video_clip_num = len(self.data_dic[video_name]['clip_data_list'])
         # print("video_clip_num: ", video_clip_num, "video_name: ", video_name)
-        if video_clip_num > 6:
-            random_anchor = random.sample(range(video_clip_num), 6)
-        else:
-            random_anchor = random.choices(range(video_clip_num), k=6)
+        random_anchor = random.sample(range(video_clip_num), 6)
+        # if video_clip_num > 6:
+        #     random_anchor = random.sample(range(video_clip_num), 6)
+        # else:
+        #     random_anchor = random.choices(range(video_clip_num), k=6)
         source_anchor, reference_anchor_list = random_anchor[0],random_anchor[1:]
         ## load source image
         source_image_path_list = self.data_dic[video_name]['clip_data_list'][source_anchor]['frame_path_list']
@@ -74,6 +78,8 @@ class DINetDataset(Dataset):
         source_image_mask = torch.from_numpy(source_image_mask).float().permute(2,0,1)
         reference_clip_data = torch.from_numpy(reference_clip_data).float().permute(2,0,1)
         deepspeech_feature = torch.from_numpy(deepspeech_feature).float().permute(1,0)
+        # print(source_image_data.shape, source_image_mask.shape, reference_clip_data.shape, deepspeech_feature.shape)
+        # pdb.set_trace()
         return source_image_data,source_image_mask, reference_clip_data,deepspeech_feature
 
     def __len__(self):
