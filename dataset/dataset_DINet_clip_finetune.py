@@ -42,10 +42,6 @@ class DINetDataset(Dataset):
         reference_clip_list = []
         for source_frame_index in range(2, 2 + 5):
             ## load source clip
-            # print(source_image_path_list[source_frame_index].replace('training_data', 'training_data_xjx'))
-            # source_image_data = cv2.imread(source_image_path_list[source_frame_index].replace('training_data', 'training_data_xjx'))[:, :, ::-1]
-            # source_image_data = cv2.imread(source_image_path_list[source_frame_index].replace('training_data', 'training_data_wanzimei'))[:, :, ::-1]
-            # source_image_data = cv2.imread(source_image_path_list[source_frame_index].replace('training_data', 'training_data_xjxorg'))[:, :, ::-1]
             source_image_data = cv2.imread(source_image_path_list[source_frame_index].replace('training_data', 'training_data_youji2'))[:, :, ::-1]
             source_image_data = cv2.resize(source_image_data, (self.img_w, self.img_h)) / 255.0
             source_clip_list.append(source_image_data)
@@ -67,9 +63,6 @@ class DINetDataset(Dataset):
                     'frame_path_list']
                 reference_random_index = random.sample(range(9), 1)[0]
                 reference_frame_path = reference_frame_path_list[reference_random_index]
-                # reference_frame_data = cv2.imread(reference_frame_path.replace('training_data', 'training_data_xjx'))[:, :, ::-1]
-                # reference_frame_data = cv2.imread(reference_frame_path.replace('training_data', 'training_data_wanzimei'))[:, :, ::-1]
-                # reference_frame_data = cv2.imread(reference_frame_path.replace('training_data', 'training_data_xjxorg'))[:, :, ::-1]
                 reference_frame_data = cv2.imread(reference_frame_path.replace('training_data', 'training_data_youji2'))[:, :, ::-1]
                 reference_frame_data = cv2.resize(reference_frame_data, (self.img_w, self.img_h)) / 255.0
                 reference_frame_list.append(reference_frame_data)

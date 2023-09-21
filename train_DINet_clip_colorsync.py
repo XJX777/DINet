@@ -75,14 +75,11 @@ if __name__ == "__main__":
     net_dV = Discriminator(opt.source_channel * 5, opt.D_block_expansion, opt.D_num_blocks, opt.D_max_features).cuda()
     net_vgg = Vgg19().cuda()
     
-    # import pdb
-    # pdb.set_trace()
     # for sync net
     # net_lipsync = SyncNetPerception(opt.pretrained_syncnet_path).cuda()
     net_lipsync = SyncNet().cuda()
     for p in net_lipsync.parameters():
         p.requires_grad = False
-    # pdb.set_trace()
     net_lipsync = load_checkpoint(opt.pretrained_syncnet_path, net_lipsync)
     net_lipsync = net_lipsync.cuda()
     

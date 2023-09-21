@@ -80,14 +80,15 @@ if __name__ == "__main__":
     # set criterion
     criterionGAN = GANLoss().cuda()
     criterionL1 = nn.L1Loss().cuda()
-    # criterionMSE = nn.MSELoss().cuda()
     criterionMSE = nn.BCELoss().cuda()
     # set scheduler
     net_g_scheduler = get_scheduler(optimizer_g, opt.non_decay, opt.decay)
     net_dI_scheduler = get_scheduler(optimizer_dI, opt.non_decay, opt.decay)
     net_dV_scheduler = get_scheduler(optimizer_dV, opt.non_decay, opt.decay)
-    # set label of syncnet perception loss
-    # real_tensor = torch.tensor(1.0).cuda()
+    
+    # set label of syncnet perception loss    
+    # # batchsize, 8, 8 for 256*256 clip
+    # # batchsize, 4, 4 for 128*128 clip
     real_tensor = torch.ones(3, 8, 8, dtype=torch.float).cuda()
     # start train
     for epoch in range(opt.start_epoch, opt.non_decay+opt.decay+1):
@@ -169,13 +170,8 @@ if __name__ == "__main__":
             train_data.radius_1_4:train_data.radius_1_4 + train_data.mouth_region_size]
             sync_score = net_lipsync(fake_out_clip_mouth, deep_speech_full)
             
-            # if loss_g_perception.item() > 2.0:
-            #     sycnet_loss_weight = 0.0
-            # else:
-            #     sycnet_loss_weight = opt.lamb_syncnet_perception
-            
-            # loss_sync = criterionMSE(sync_score, real_tensor.expand_as(sync_score)) * opt.lamb_syncnet_perception
-            # loss_sync = criterionMSE(torch.sigmoid(sync_score).view(-1, 4, 4), real_tensor) * opt.lamb_syncnet_perception
+            # # batchsize, 8, 8 for 256*256 clip
+            # # batchsize, 4, 4 for 128*128 clip
             loss_sync = criterionMSE(torch.sigmoid(sync_score).view(-1, 8, 8), real_tensor)
             # combine all losses
             loss_g =   loss_g_perception + loss_g_dI +loss_g_dV + loss_sync * sycnet_loss_weight
