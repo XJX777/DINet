@@ -80,10 +80,9 @@ if __name__ == "__main__":
             if iteration % 100 == 0:
                 fake_frame = fake_out[0, :, :, :].squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255
                 real_frame = source_image_data[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy() * 255
-                fake_img_name = "./vis_frame_64/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake.jpg'
-                real_img_name = "./vis_frame_64/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_real.jpg'
-                cv2.imwrite(fake_img_name, fake_frame[:, :, ::-1])
-                cv2.imwrite(real_img_name, real_frame[:, :, ::-1])
+                fake_real_frame = cv2.hconcat([fake_frame, real_frame])
+                fake_real_img_name = "./frame128_part1_2_vis/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake_real.jpg'
+                cv2.imwrite(fake_real_img_name, fake_real_frame[:, :, ::-1])
             
             # down sample output image and real image
             fake_out_half = F.avg_pool2d(fake_out, 3, 2, 1, count_include_pad=False)

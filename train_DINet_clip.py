@@ -75,7 +75,7 @@ if __name__ == "__main__":
     for epoch in range(opt.start_epoch, opt.non_decay+opt.decay+1):
         net_g.train()
         if epoch >= 5:
-            sycnet_loss_weight = 0.05
+            sycnet_loss_weight = 0.1
         else:
             sycnet_loss_weight = 0.0
             
@@ -96,10 +96,9 @@ if __name__ == "__main__":
             if iteration % 100 == 0:
                 fake_frame = fake_out[0, :, :, :].squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255
                 real_frame = source_clip[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy() * 255
-                fake_img_name = "./vis_clip_128/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake.jpg'
-                real_img_name = "./vis_clip_128/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_real.jpg'
-                cv2.imwrite(fake_img_name, fake_frame[:, :, ::-1])
-                cv2.imwrite(real_img_name, real_frame[:, :, ::-1])
+                fake_real_frame = cv2.hconcat([fake_frame, real_frame])
+                fake_real_img_name = "./clip128_part1_2_vis/epoch" + str(epoch).zfill(4) + '_' + str(iteration).zfill(5) + '_fake_real.jpg'
+                cv2.imwrite(fake_real_img_name, fake_real_frame[:, :, ::-1])
             
             # (1) Update DI network
             optimizer_dI.zero_grad()
